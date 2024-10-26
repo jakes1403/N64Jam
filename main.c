@@ -46,10 +46,12 @@ int main()
         rspq_profile_start();
     #endif
 
-    // Initialize the random number generator
+    // Initialize the random number generator, then call rand() every
+    // frame so to get random behavior also in emulators.
     uint32_t seed;
     getentropy(&seed, sizeof(seed));
     srand(seed);
+    register_VI_handler((void(*)(void))rand);
 
     // Program Loop
     while (1)
@@ -98,6 +100,8 @@ int main()
         
         // End the current level
         rspq_wait();
+        for (int i=0; i<32; i++)
+            mixer_ch_stop(i);
         minigame_get_game()->funcPointer_cleanup();
         minigame_cleanup();
     }

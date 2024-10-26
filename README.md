@@ -2,7 +2,9 @@
 
 Welcome to this year's N64brew game jam. This year, we are creating a large collective minigame ROM, and that requires every project to use the same base. Therefore, we are providing this base template for all projects to fork from. Unfortunately, due to time constraints, we were only able to provide a single template for [Libdragon](https://github.com/DragonMinded/libdragon).
 
-Please ensure that you are using the **latest** `preview` branch of Libdragon, that you have [Tiny3D](https://github.com/HailToDodongo/tiny3d) installed, and that you are able to compile this ROM without issues. This template has both an OpenGL and [Tiny3D](https://github.com/HailToDodongo/tiny3d) example game. We also recommend that you fork this repository so that you can then perform a pull request for your final project (although you will lose the ability to make your repository private). 
+Please ensure that you are using the **latest** `preview` branch of Libdragon, that you have [Tiny3D](https://github.com/HailToDodongo/tiny3d) installed, and that you are able to compile this ROM without issues. This template has both an OpenGL and [Tiny3D](https://github.com/HailToDodongo/tiny3d) example game. We also recommend that you fork this repository so that you can then perform a pull request for your final project (although you will lose the ability to make your repository private).
+
+Please note that the menu provided by the template **is not final** and will be changed in the final ROM.
 
 
 ### Starting a new minigame
@@ -50,6 +52,8 @@ const MinigameDef minigame_def = {
 };
 ```
 
+We have provided a blank minigame template in `assets/blank/blank_template.c` that includes everything you need to get started with a new game. Just move this folder over to the `code` folder, and rename the `blank` folder and `blank_template.c` file to whatever you want (ideally something that matches your game).
+
 Please be careful with cleaning up the memory used by your project, use the `sys_get_heap_stats` function provided by Libdragon to compare the heap allocations during your minigame initialization and after everything has been cleaned up. Libdragon does use `malloc` internally for handling some things, so if you notice that your cleanup function doesn't account for all bytes, try running your minigame two or three more times. The memory usage should stabilize after the first run of the minigame.
 
 Both the `core.h` and `minigame.h` headers include some public functions which you should be using in your project. Most importantly, you should be using `core_get_playercontroller` to get a specific player's controller port, as there is no guarantee that player 1's controller is plugged into port 1 on the console.
@@ -73,5 +77,5 @@ Here's some suggestions of QOL things you should do for minigames, they are **no
 * In the examples, we are also using `assets/core/Stop.wav` when the minigame ends, and then `assets/core/Winner.wav` when the winner is announced.
 * Allow the minigame to be paused by pressing START, and possibly exit as well
 * It's recommended to keep player colors consistent between games. We set some definitions in `core.h` which you should use. 
-* We have button icons available in `assets/core` (we're missing some, working on it)
+* We have button icons available in `assets/core`
 * Try to keep your (compressed) assets under 2 MiB, since everyone needs to share the ROM space. Not a big deal if you MUST go over.
