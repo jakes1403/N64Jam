@@ -20,11 +20,15 @@ const MinigameDef minigame_def = {
     .instructions = "Press A to win."
 };
 
-T3DMat4 modelMat; // matrix for our model, this is a "normal" float matrix
+T3DMat4 modelMat;
 
 T3DMat4FP* modelMatFP = NULL;
 
-const T3DVec3 camPos = {{0,0,-18}};
+T3DMat4 blockMat;
+
+T3DMat4FP* blockMatFP = NULL;
+
+const T3DVec3 camPos = {{0,20,-20}};
 const T3DVec3 camTarget = {{0,0,0}};
 
 uint8_t colorAmbient[4] = {80, 80, 100, 0xFF};
@@ -34,7 +38,9 @@ T3DVec3 lightDirVec = {{-1.0f, 1.0f, 1.0f}};
 
 float rotAngle = 0.0f;
 
-T3DVec3 rotAxis = {{-1.0f, 2.5f, 0.25f}};
+T3DVec3 rotAxis = {{0, 0, 0}};
+
+T3DVec3 boxPosition = {{0, 0, 0}};
 
 T3DViewport viewport;
 
@@ -60,7 +66,8 @@ bool is_countdown()
 
 int winningPlayer = 0;
 
-T3DModel *model = NULL;
+T3DModel *mapModel = NULL;
+T3DModel *boxModel = NULL;
 
 /*==============================
     minigame_init
@@ -77,9 +84,10 @@ void minigame_init()
     t3d_init((T3DInitParams){}); // Init library itself, use empty params for default settings
 
     t3d_mat4_identity(&modelMat);
-    // Now allocate a fixed-point matrix, this is what t3d uses internally.
-    modelMatFP = malloc_uncached(sizeof(T3DMat4FP));
 
+    t3d_mat4_identity(&blockMat);
+
+    blockMatFP = malloc_uncached(sizeof(T3DMat4FP));
 
     t3d_vec3_norm(&lightDirVec);
 
@@ -97,7 +105,9 @@ void minigame_init()
 
     modelMatFP = malloc_uncached(sizeof(T3DMat4FP));
 
-    model = t3d_model_load("rom:/jake_game/model.t3dm");
+    mapModel = t3d_model_load("rom:/jake_game/map.t3dm");
+
+    boxModel = t3d_model_load("rom:/jake_game/box.t3dm");
 }
 
 /*==============================
@@ -137,13 +147,25 @@ void minigame_fixedloop(float deltatime)
     Code that is called every loop.
     @param  The delta time for this tick
 ==============================*/
+
 void minigame_loop(float deltatime)
 {
     for (size_t i = 0; i < core_get_playercount(); i++)
     {
         // For human players, check if the physical A button on the controller was pressed
-        joypad_buttons_t btn = joypad_get_buttons_pressed(core_get_playercontroller(i));
-        if (btn.a)
+        joypad_port_t controller_port = core_get_playercontroller(i);
+
+        joypad_inputs_t inputs = joypad_get_inputs(controller_port);
+
+        joypad_buttons_t btn = inputs.btn;
+
+        if (i == 0)
+        {
+            boxPosition.v[0] += (inputs.stick_x * -1) / 255.0f;
+            boxPosition.v[2] += inputs.stick_y  / 255.0f;
+        }
+
+        if (btn.a && !is_countdown() && !is_ending)
         {
             core_set_winner(i);
             is_ending = true;
@@ -152,8 +174,6 @@ void minigame_loop(float deltatime)
         }
     }
 
-    // ======== Update ======== //
-    rotAngle += 0.03f;
 
     // we can set up our viewport settings beforehand here
     t3d_viewport_set_projection(&viewport, T3D_DEG_TO_RAD(85.0f), 10.0f, 100.0f);
@@ -161,9 +181,13 @@ void minigame_loop(float deltatime)
 
     // Model-Matrix, t3d offers some basic matrix functions
     t3d_mat4_identity(&modelMat);
-    t3d_mat4_rotate(&modelMat, &rotAxis, rotAngle);
     t3d_mat4_scale(&modelMat, 0.02f, 0.02f, 0.02f);
     t3d_mat4_to_fixed(modelMatFP, &modelMat);
+
+    t3d_mat4_identity(&blockMat);
+    t3d_mat4_translate(&blockMat, boxPosition.v[0], boxPosition.v[1], boxPosition.v[2]);
+    t3d_mat4_scale(&blockMat, 0.02f, 0.02f, 0.02f);
+    t3d_mat4_to_fixed(blockMatFP, &blockMat);
 
     // ======== Draw (3D) ======== //
     rdpq_attach(display_get(), display_get_zbuf()); // set the target to draw to
@@ -187,8 +211,11 @@ void minigame_loop(float deltatime)
       rspq_block_begin();
 
       t3d_matrix_push(modelMatFP);
-      // Draw the model, material settings (e.g. textures, color-combiner) are handled internally
-      t3d_model_draw(model);
+      t3d_model_draw(mapModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(blockMatFP);
+      t3d_model_draw(boxModel);
       t3d_matrix_pop(1);
 
       dplDraw = rspq_block_end();
