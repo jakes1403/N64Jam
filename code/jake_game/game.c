@@ -25,8 +25,30 @@ T3DMat4 modelMat;
 T3DMat4FP* modelMatFP = NULL;
 
 T3DMat4 blockMat;
-
 T3DMat4FP* blockMatFP = NULL;
+
+struct Box {
+    T3DVec3 position;
+
+    T3DMat4 matrix;
+    T3DMat4FP* matrixFP;
+};
+
+void InitBox(struct Box* box)
+{
+    box->position.v[0] = 0;
+    box->position.v[1] = 0;
+    box->position.v[2] = 0;
+    box->matrixFP = malloc_uncached(sizeof(T3DMat4FP));
+}
+
+void mutateBoxPostion(struct Box* box)
+{
+    t3d_mat4_identity(&box->matrix);
+    t3d_mat4_scale(&box->matrix, 0.05f, 0.05f, 0.05f);
+    t3d_mat4_translate(&box->matrix, box->position.v[0], box->position.v[1], box->position.v[2]);
+    t3d_mat4_to_fixed(box->matrixFP, &box->matrix);
+}
 
 const T3DVec3 camPos = {{0,20,-20}};
 const T3DVec3 camTarget = {{0,0,0}};
@@ -69,6 +91,8 @@ int winningPlayer = 0;
 T3DModel *mapModel = NULL;
 T3DModel *boxModel = NULL;
 
+struct Box box1;
+
 /*==============================
     minigame_init
     The minigame initialization function
@@ -108,6 +132,10 @@ void minigame_init()
     mapModel = t3d_model_load("rom:/jake_game/map.t3dm");
 
     boxModel = t3d_model_load("rom:/jake_game/box.t3dm");
+
+    InitBox(&box1);
+
+    box1.position.v[0] = 10;
 }
 
 /*==============================
@@ -159,10 +187,24 @@ void minigame_loop(float deltatime)
 
         joypad_buttons_t btn = inputs.btn;
 
-        if (i == 0)
+        if(i == 0)
         {
-            boxPosition.v[0] += (inputs.stick_x * -1) / 255.0f;
-            boxPosition.v[2] += inputs.stick_y  / 255.0f;
+            float x = (inputs.stick_x * -1) / 255.0f;
+            float y = inputs.stick_y  / 255.0f;
+            float mag = sqrt(x*x + y*y);
+
+            float x_norm = 0.0f;
+            float y_norm = 0.0f;
+            if (mag != 0.0f)
+            {
+                x_norm = x/mag;
+                y_norm = y/mag;
+            }
+
+            const float move_speed = 10.0f;
+
+            boxPosition.v[0] += x_norm * deltatime * move_speed;
+            boxPosition.v[2] += y_norm * deltatime * move_speed;
         }
 
         if (btn.a && !is_countdown() && !is_ending)
@@ -206,6 +248,8 @@ void minigame_loop(float deltatime)
 
     t3d_state_set_drawflags(T3D_FLAG_SHADED | T3D_FLAG_DEPTH);
 
+    mutateBoxPostion(&box1);
+
     // t3d functions can be recorded into a display list:
     if(!dplDraw) {
       rspq_block_begin();
@@ -215,6 +259,10 @@ void minigame_loop(float deltatime)
       t3d_matrix_pop(1);
 
       t3d_matrix_push(blockMatFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box1.matrixFP);
       t3d_model_draw(boxModel);
       t3d_matrix_pop(1);
 
