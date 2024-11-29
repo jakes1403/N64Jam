@@ -57,7 +57,9 @@ void mutateBoxPostion(struct Box* box, float scale)
     t3d_mat4_to_fixed(box->matrixFP, &box->matrix);
 }
 
-const T3DVec3 camPos = {{0,35,-35}};
+const float move_speed = 30.0f;
+
+T3DVec3 camPos = {{0,44,-7}};
 const T3DVec3 camTarget = {{0,0,0}};
 
 uint8_t colorAmbient[4] = {80, 80, 100, 0xFF};
@@ -124,6 +126,11 @@ struct Box box12;
 
 struct Box players[4];
 
+bool p1_dead = false;
+bool p2_dead = false;
+bool p3_dead = false;
+bool p4_dead = false;
+
 bool in_bounds = false;
 
 bool test_in_bounds(float x, float y, float x_left, float x_right, float y_up, float y_down)
@@ -138,12 +145,11 @@ bool in_square_bounds(float x, float y, float square_x, float square_y, float sq
     return test_in_bounds(x, y, square_x - dia, square_x + dia, square_y + dia, square_y - dia);
 }
 
-const float move_speed = 10.0f;
+const int box_size = 10;
+const int box_max_push_distance = 3;
 
 void processBox(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback)
 {
-    const int box_size = 10;
-    const int box_max_push_distance = 5;
     bool p1_in_bounds = in_square_bounds(player_x, player_y,box->position.v[0], box->position.v[2], box_size );
 
     if (p1_in_bounds)
@@ -167,8 +173,6 @@ void processBox(float player_x, float player_y, float player2_x, float player2_y
 
 void processBox_h(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback)
 {
-    const int box_size = 10;
-    const int box_max_push_distance = 5;
     bool p1_in_bounds = in_square_bounds(player_x, player_y,box->position.v[0], box->position.v[2], box_size );
 
     if (p1_in_bounds)
@@ -373,8 +377,50 @@ void minigame_loop(float deltatime)
             y_norm = y/mag;
         }
 
-        players[i].velocity.v[0] = x_norm * deltatime * move_speed;
-        players[i].velocity.v[2] = y_norm * deltatime * move_speed;
+
+        bool can_move = true;
+
+        if (p1_dead && i == 0)
+        {
+            can_move = false;
+        }
+        if (p2_dead && i == 1)
+        {
+            can_move = false;
+        }
+        if (p3_dead && i == 2)
+        {
+            can_move = false;
+        }
+        if (p4_dead && i == 3)
+        {
+            can_move = false;
+        }
+
+        if (can_move)
+        {
+            players[i].velocity.v[0] = x_norm * deltatime * move_speed;
+            players[i].velocity.v[2] = y_norm * deltatime * move_speed;
+        }
+        
+
+        // if (btn.c_left)
+        // {
+        //     camPos.y -= 1;
+        // }
+        // if (btn.c_right)
+        // {
+        //     camPos.y += 1;
+        // }
+
+        // if (btn.c_down)
+        // {
+        //     camPos.z -= 1;
+        // }
+        // if (btn.c_up)
+        // {
+        //     camPos.z += 1;
+        // }
 
 
         if (btn.a && !is_countdown() && !is_ending)
@@ -547,9 +593,31 @@ void minigame_loop(float deltatime)
 
     for (int i = 0; i < 4; i++)
     {
-        players[i].position.v[0] += players[i].velocity.v[0];
-        players[i].position.v[2] += players[i].velocity.v[2];
-        mutateBoxPostion(&players[i], 0.02f);
+        bool can_move = true;
+
+        if (p1_dead && i == 0)
+        {
+            can_move = false;
+        }
+        if (p2_dead && i == 1)
+        {
+            can_move = false;
+        }
+        if (p3_dead && i == 2)
+        {
+            can_move = false;
+        }
+        if (p4_dead && i == 3)
+        {
+            can_move = false;
+        }
+
+        if (can_move)
+        {
+            players[i].position.v[0] += players[i].velocity.v[0];
+            players[i].position.v[2] += players[i].velocity.v[2];
+            mutateBoxPostion(&players[i], 0.02f);
+        }
     }
 
     // t3d functions can be recorded into a display list:
@@ -635,6 +703,8 @@ void minigame_loop(float deltatime)
     // {
     //     rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 155, 100, "NOT IN BOUNDS");
     // }
+
+    rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 155, 200, "CamPos (%f, %f)", camPos.y, camPos.z);
     
 
     if (is_countdown()) {
