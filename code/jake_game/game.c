@@ -13,6 +13,9 @@
 #define WIN_DELAY           5.0f
 #define WIN_SHOW_DELAY      2.0f
 
+// TODO: Flip false when releasing
+const bool DEBUG_CONTROLLER_PORT_MODE = true;
+
 const MinigameDef minigame_def = {
     .gamename = "Jakes Game",
     .developername = "jakes1403",
@@ -24,14 +27,13 @@ T3DMat4 modelMat;
 
 T3DMat4FP* modelMatFP = NULL;
 
-T3DMat4 blockMat;
-T3DMat4FP* blockMatFP = NULL;
-
 struct Box {
     T3DVec3 position;
 
     T3DMat4 matrix;
     T3DMat4FP* matrixFP;
+
+    T3DVec3 velocity;
 };
 
 void InitBox(struct Box* box)
@@ -39,18 +41,23 @@ void InitBox(struct Box* box)
     box->position.v[0] = 0;
     box->position.v[1] = 0;
     box->position.v[2] = 0;
+
+    box->velocity.v[0] = 0;
+    box->velocity.v[1] = 0;
+    box->velocity.v[2] = 0;
+
     box->matrixFP = malloc_uncached(sizeof(T3DMat4FP));
 }
 
-void mutateBoxPostion(struct Box* box)
+void mutateBoxPostion(struct Box* box, float scale)
 {
     t3d_mat4_identity(&box->matrix);
-    t3d_mat4_scale(&box->matrix, 0.05f, 0.05f, 0.05f);
+    t3d_mat4_scale(&box->matrix, scale, scale, scale);
     t3d_mat4_translate(&box->matrix, box->position.v[0], box->position.v[1], box->position.v[2]);
     t3d_mat4_to_fixed(box->matrixFP, &box->matrix);
 }
 
-const T3DVec3 camPos = {{0,20,-20}};
+const T3DVec3 camPos = {{0,35,-35}};
 const T3DVec3 camTarget = {{0,0,0}};
 
 uint8_t colorAmbient[4] = {80, 80, 100, 0xFF};
@@ -93,6 +100,96 @@ T3DModel *boxModel = NULL;
 
 struct Box box1;
 
+struct Box box2;
+
+struct Box box3;
+
+struct Box box4;
+
+struct Box box5;
+
+struct Box box6;
+
+struct Box box7;
+
+struct Box box8;
+
+struct Box box9;
+
+struct Box box10;
+
+struct Box box11;
+
+struct Box box12;
+
+struct Box players[4];
+
+bool in_bounds = false;
+
+bool test_in_bounds(float x, float y, float x_left, float x_right, float y_up, float y_down)
+{
+    return x_left < x && x < x_right &&
+        y_down < y && y < y_up;
+}
+
+bool in_square_bounds(float x, float y, float square_x, float square_y, float square_width)
+{
+    float dia = square_width / 2;
+    return test_in_bounds(x, y, square_x - dia, square_x + dia, square_y + dia, square_y - dia);
+}
+
+const float move_speed = 10.0f;
+
+void processBox(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback)
+{
+    const int box_size = 10;
+    const int box_max_push_distance = 5;
+    bool p1_in_bounds = in_square_bounds(player_x, player_y,box->position.v[0], box->position.v[2], box_size );
+
+    if (p1_in_bounds)
+    {
+        box->position.v[2] += deltatime * move_speed;
+    }
+
+    bool p2_in_bounds = in_square_bounds(player2_x, player2_y,box->position.v[0], box->position.v[2], box_size );
+
+    if (p2_in_bounds)
+    {
+        box->position.v[2] -= deltatime * move_speed;
+    }
+
+    box->position.v[2] = fmin(box->position.v[2], box_max_push_distance);
+    box->position.v[2] = fmax(box->position.v[2], -box_max_push_distance);
+
+    *p1_pushback = (box->position.v[2] == box_max_push_distance && p1_in_bounds) || (p2_in_bounds && p1_in_bounds);
+    *p2_pushback = (box->position.v[2] == -box_max_push_distance && p2_in_bounds) || (p1_in_bounds && p2_in_bounds);
+}
+
+void processBox_h(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback)
+{
+    const int box_size = 10;
+    const int box_max_push_distance = 5;
+    bool p1_in_bounds = in_square_bounds(player_x, player_y,box->position.v[0], box->position.v[2], box_size );
+
+    if (p1_in_bounds)
+    {
+        box->position.v[0] -= deltatime * move_speed;
+    }
+
+    bool p2_in_bounds = in_square_bounds(player2_x, player2_y,box->position.v[0], box->position.v[2], box_size );
+
+    if (p2_in_bounds)
+    {
+        box->position.v[0] += deltatime * move_speed;
+    }
+
+    box->position.v[0] = fmax(box->position.v[0], -box_max_push_distance);
+    box->position.v[0] = fmin(box->position.v[0], box_max_push_distance);
+
+    *p1_pushback = (box->position.v[0] == -box_max_push_distance && p1_in_bounds) || (p2_in_bounds && p1_in_bounds);
+    *p2_pushback = (box->position.v[0] == box_max_push_distance && p2_in_bounds) || (p1_in_bounds && p2_in_bounds);
+}
+
 /*==============================
     minigame_init
     The minigame initialization function
@@ -102,16 +199,17 @@ void minigame_init()
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE_ANTIALIAS);
     rdpq_init();
 
+    debug_init_isviewer();
+    debug_init_usblog();
+
+    rdpq_debug_start();
+
     font = rdpq_font_load_builtin(FONT_BUILTIN_DEBUG_VAR);
     rdpq_text_register_font(FONT_TEXT, font);
 
     t3d_init((T3DInitParams){}); // Init library itself, use empty params for default settings
 
     t3d_mat4_identity(&modelMat);
-
-    t3d_mat4_identity(&blockMat);
-
-    blockMatFP = malloc_uncached(sizeof(T3DMat4FP));
 
     t3d_vec3_norm(&lightDirVec);
 
@@ -135,7 +233,73 @@ void minigame_init()
 
     InitBox(&box1);
 
+    InitBox(&box2);
+
+    InitBox(&box3);
+
+    InitBox(&box4);
+
+    InitBox(&box5);
+
+    InitBox(&box6);
+
+    InitBox(&box7);
+
+    InitBox(&box8);
+
+    InitBox(&box9);
+
+    InitBox(&box10);
+
+    InitBox(&box11);
+
+    InitBox(&box12);
+
     box1.position.v[0] = 10;
+
+    box2.position.v[0] = 20;
+
+    box3.position.v[0] = 30;
+
+    box4.position.v[2] = -10;
+
+    box5.position.v[2] = -20;
+
+    box6.position.v[2] = -30;
+
+    box7.position.v[2] = 10;
+
+    box8.position.v[2] = 20;
+
+    box9.position.v[2] = 30;
+
+    box10.position.v[0] = -10;
+
+    box11.position.v[0] = -20;
+
+    box12.position.v[0] = -30;
+
+    boxPosition.v[0] = 20;
+
+    boxPosition.v[2] = -20;
+
+    for (int i = 0; i < 4; i++)
+    {
+        InitBox(&players[i]);
+    }
+
+    players[0].position.v[0] = 20;
+    players[0].position.v[2] = -20;
+
+    players[1].position.v[0] = 20;
+    players[1].position.v[2] = 20;
+
+    players[2].position.v[0] = -20;
+    players[2].position.v[2] = 20;
+
+    players[3].position.v[0] = -20;
+    players[3].position.v[2] = -20;
+    
 }
 
 /*==============================
@@ -178,34 +342,40 @@ void minigame_fixedloop(float deltatime)
 
 void minigame_loop(float deltatime)
 {
-    for (size_t i = 0; i < core_get_playercount(); i++)
+    size_t playerCount = core_get_playercount();
+    if (DEBUG_CONTROLLER_PORT_MODE)
+    {
+        playerCount = 4;
+    }
+    for (size_t i = 0; i < playerCount; i++)
     {
         // For human players, check if the physical A button on the controller was pressed
         joypad_port_t controller_port = core_get_playercontroller(i);
+
+        if (DEBUG_CONTROLLER_PORT_MODE)
+        {
+            controller_port = i;
+        }
 
         joypad_inputs_t inputs = joypad_get_inputs(controller_port);
 
         joypad_buttons_t btn = inputs.btn;
 
-        if(i == 0)
+        float x = (inputs.stick_x * -1) / 255.0f;
+        float y = inputs.stick_y  / 255.0f;
+        float mag = sqrt(x*x + y*y);
+
+        float x_norm = 0.0f;
+        float y_norm = 0.0f;
+        if (mag > 0.01f)
         {
-            float x = (inputs.stick_x * -1) / 255.0f;
-            float y = inputs.stick_y  / 255.0f;
-            float mag = sqrt(x*x + y*y);
-
-            float x_norm = 0.0f;
-            float y_norm = 0.0f;
-            if (mag != 0.0f)
-            {
-                x_norm = x/mag;
-                y_norm = y/mag;
-            }
-
-            const float move_speed = 10.0f;
-
-            boxPosition.v[0] += x_norm * deltatime * move_speed;
-            boxPosition.v[2] += y_norm * deltatime * move_speed;
+            x_norm = x/mag;
+            y_norm = y/mag;
         }
+
+        players[i].velocity.v[0] = x_norm * deltatime * move_speed;
+        players[i].velocity.v[2] = y_norm * deltatime * move_speed;
+
 
         if (btn.a && !is_countdown() && !is_ending)
         {
@@ -226,11 +396,6 @@ void minigame_loop(float deltatime)
     t3d_mat4_scale(&modelMat, 0.02f, 0.02f, 0.02f);
     t3d_mat4_to_fixed(modelMatFP, &modelMat);
 
-    t3d_mat4_identity(&blockMat);
-    t3d_mat4_translate(&blockMat, boxPosition.v[0], boxPosition.v[1], boxPosition.v[2]);
-    t3d_mat4_scale(&blockMat, 0.02f, 0.02f, 0.02f);
-    t3d_mat4_to_fixed(blockMatFP, &blockMat);
-
     // ======== Draw (3D) ======== //
     rdpq_attach(display_get(), display_get_zbuf()); // set the target to draw to
     t3d_frame_start(); // call this once per frame at the beginning of your draw function
@@ -239,7 +404,7 @@ void minigame_loop(float deltatime)
 
     rdpq_mode_combiner(RDPQ_COMBINER_SHADE);
     // this cleans the entire screen (even if out viewport is smaller)
-    t3d_screen_clear_color(RGBA32(100, 0, 100, 0));
+    t3d_screen_clear_color(RGBA32(252, 135, 126, 0));
     t3d_screen_clear_depth();
 
     t3d_light_set_ambient(colorAmbient); // one global ambient light, always active
@@ -248,30 +413,229 @@ void minigame_loop(float deltatime)
 
     t3d_state_set_drawflags(T3D_FLAG_SHADED | T3D_FLAG_DEPTH);
 
-    mutateBoxPostion(&box1);
+    bool p1_moveback1 = false;
+    bool p2_moveback1 = false;
+    processBox(players[0].position.v[0], players[0].position.v[2], players[1].position.v[0], players[1].position.v[2], deltatime, &box1, &p1_moveback1, &p2_moveback1);
+    bool p1_moveback2 = false;
+    bool p2_moveback2 = false;
+    processBox(players[0].position.v[0], players[0].position.v[2], players[1].position.v[0], players[1].position.v[2], deltatime, &box2, &p1_moveback2, &p2_moveback2);
+    bool p1_moveback3 = false;
+    bool p2_moveback3 = false;
+    processBox(players[0].position.v[0], players[0].position.v[2],players[1].position.v[0], players[1].position.v[2], deltatime, &box3, &p1_moveback3, &p2_moveback3);
+
+    bool p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
+    bool p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
+
+    if (p1_moveBack)
+    {
+        if (players[0].velocity.v[2] > 0)
+        {
+            players[0].velocity.v[2] = 0;
+        }
+    }
+
+    if (p2_moveBack)
+    {
+        if (players[1].velocity.v[2] < 0)
+        {
+            players[1].velocity.v[2] = 0;
+        }
+    }
+
+    p1_moveback1 = false;
+    p2_moveback1 = false;
+    processBox_h(players[0].position.v[0], players[0].position.v[2], players[3].position.v[0], players[3].position.v[2], deltatime, &box4, &p1_moveback1, &p2_moveback1);
+    p1_moveback2 = false;
+    p2_moveback2 = false;
+    processBox_h(players[0].position.v[0], players[0].position.v[2], players[3].position.v[0], players[3].position.v[2], deltatime, &box5, &p1_moveback2, &p2_moveback2);
+    p1_moveback3 = false;
+    p2_moveback3 = false;
+    processBox_h(players[0].position.v[0], players[0].position.v[2],players[3].position.v[0], players[3].position.v[2], deltatime, &box6, &p1_moveback3, &p2_moveback3);
+
+    p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
+    p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
+
+    if (p1_moveBack)
+    {
+        if (players[0].velocity.v[0] < 0)
+        {
+            players[0].velocity.v[0] = 0;
+        }
+    }
+
+    if (p2_moveBack)
+    {
+        if (players[3].velocity.v[0] > 0)
+        {
+            players[3].velocity.v[0] = 0;
+        }
+    }
+
+    p1_moveback1 = false;
+    p2_moveback1 = false;
+    processBox_h(players[1].position.v[0], players[1].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box7, &p1_moveback1, &p2_moveback1);
+    p1_moveback2 = false;
+    p2_moveback2 = false;
+    processBox_h(players[1].position.v[0], players[1].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box8, &p1_moveback2, &p2_moveback2);
+    p1_moveback3 = false;
+    p2_moveback3 = false;
+    processBox_h(players[1].position.v[0], players[1].position.v[2],players[2].position.v[0], players[2].position.v[2], deltatime, &box9, &p1_moveback3, &p2_moveback3);
+
+    p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
+    p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
+
+    if (p1_moveBack)
+    {
+        if (players[1].velocity.v[0] < 0)
+        {
+            players[1].velocity.v[0] = 0;
+        }
+    }
+
+    if (p2_moveBack)
+    {
+        if (players[2].velocity.v[0] > 0)
+        {
+            players[2].velocity.v[0] = 0;
+        }
+    }
+
+    p1_moveback1 = false;
+    p2_moveback1 = false;
+    processBox(players[3].position.v[0], players[3].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box10, &p1_moveback1, &p2_moveback1);
+    p1_moveback2 = false;
+    p2_moveback2 = false;
+    processBox(players[3].position.v[0], players[3].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box11, &p1_moveback2, &p2_moveback2);
+    p1_moveback3 = false;
+    p2_moveback3 = false;
+    processBox(players[3].position.v[0], players[3].position.v[2],players[2].position.v[0], players[2].position.v[2], deltatime, &box12, &p1_moveback3, &p2_moveback3);
+
+    p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
+    p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
+
+    if (p1_moveBack)
+    {
+        if (players[3].velocity.v[2] > 0)
+        {
+            players[3].velocity.v[2] = 0;
+        }
+    }
+
+    if (p2_moveBack)
+    {
+        if (players[2].velocity.v[2] < 0)
+        {
+            players[2].velocity.v[2] = 0;
+        }
+    }
+
+    mutateBoxPostion(&box1, 0.05f);
+    mutateBoxPostion(&box2, 0.05f);
+    mutateBoxPostion(&box3, 0.05f);
+
+    mutateBoxPostion(&box4, 0.05f);
+    mutateBoxPostion(&box5, 0.05f);
+    mutateBoxPostion(&box6, 0.05f);
+
+    mutateBoxPostion(&box7, 0.05f);
+    mutateBoxPostion(&box8, 0.05f);
+    mutateBoxPostion(&box9, 0.05f);
+
+    mutateBoxPostion(&box10, 0.05f);
+    mutateBoxPostion(&box11, 0.05f);
+    mutateBoxPostion(&box12, 0.05f);
+
+    for (int i = 0; i < 4; i++)
+    {
+        players[i].position.v[0] += players[i].velocity.v[0];
+        players[i].position.v[2] += players[i].velocity.v[2];
+        mutateBoxPostion(&players[i], 0.02f);
+    }
 
     // t3d functions can be recorded into a display list:
     if(!dplDraw) {
       rspq_block_begin();
 
-      t3d_matrix_push(modelMatFP);
-      t3d_model_draw(mapModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(blockMatFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
+    //   t3d_matrix_push(modelMatFP);
+    //   t3d_model_draw(mapModel);
+    //   t3d_matrix_pop(1);
 
       t3d_matrix_push(box1.matrixFP);
       t3d_model_draw(boxModel);
       t3d_matrix_pop(1);
+
+      t3d_matrix_push(box2.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box3.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box4.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box5.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box6.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box7.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box8.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box9.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box10.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box11.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      t3d_matrix_push(box12.matrixFP);
+      t3d_model_draw(boxModel);
+      t3d_matrix_pop(1);
+
+      for (int i = 0; i < 4; i++)
+      {
+        t3d_matrix_push(players[i].matrixFP);
+        t3d_model_draw(boxModel);
+        t3d_matrix_pop(1);
+      }
+      
 
       dplDraw = rspq_block_end();
     }
 
     rspq_block_run(dplDraw);
 
+    rdpq_sync_pipe();
+
     rdpq_set_mode_standard();
+
+    in_bounds = in_square_bounds(boxPosition.v[0], boxPosition.v[2],box1.position.v[0], box1.position.v[2], 10 );
+
+    // if (in_bounds)
+    // {
+    //     rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 155, 100, "IN BOUNDS!");
+    // }
+    // else
+    // {
+    //     rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 155, 100, "NOT IN BOUNDS");
+    // }
+    
 
     if (is_countdown()) {
         // Draw countdown

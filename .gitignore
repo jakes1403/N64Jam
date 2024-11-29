@@ -3,4 +3,7 @@ build/
 filesystem/
 *.z64
 .vscode/
-tiny3d/
+
+# Blender backup files
+*.blend[0-9]
+
