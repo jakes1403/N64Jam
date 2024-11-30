@@ -148,7 +148,7 @@ bool in_square_bounds(float x, float y, float square_x, float square_y, float sq
 const int box_size = 10;
 const int box_max_push_distance = 3;
 
-void processBox(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback)
+void processBox(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback, bool *on_p1_side, bool *on_p2_side)
 {
     bool p1_in_bounds = in_square_bounds(player_x, player_y,box->position.v[0], box->position.v[2], box_size );
 
@@ -167,11 +167,14 @@ void processBox(float player_x, float player_y, float player2_x, float player2_y
     box->position.v[2] = fmin(box->position.v[2], box_max_push_distance);
     box->position.v[2] = fmax(box->position.v[2], -box_max_push_distance);
 
-    *p1_pushback = (box->position.v[2] == box_max_push_distance && p1_in_bounds) || (p2_in_bounds && p1_in_bounds);
-    *p2_pushback = (box->position.v[2] == -box_max_push_distance && p2_in_bounds) || (p1_in_bounds && p2_in_bounds);
+    *on_p2_side = box->position.v[2] == box_max_push_distance;
+    *on_p1_side = box->position.v[2] == -box_max_push_distance;
+
+    *p1_pushback = (on_p2_side && p1_in_bounds) || (p2_in_bounds && p1_in_bounds);
+    *p2_pushback = (on_p1_side && p2_in_bounds) || (p1_in_bounds && p2_in_bounds);
 }
 
-void processBox_h(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback)
+void processBox_h(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback, bool *on_p1_side, bool *on_p2_side)
 {
     bool p1_in_bounds = in_square_bounds(player_x, player_y,box->position.v[0], box->position.v[2], box_size );
 
@@ -190,8 +193,11 @@ void processBox_h(float player_x, float player_y, float player2_x, float player2
     box->position.v[0] = fmax(box->position.v[0], -box_max_push_distance);
     box->position.v[0] = fmin(box->position.v[0], box_max_push_distance);
 
-    *p1_pushback = (box->position.v[0] == -box_max_push_distance && p1_in_bounds) || (p2_in_bounds && p1_in_bounds);
-    *p2_pushback = (box->position.v[0] == box_max_push_distance && p2_in_bounds) || (p1_in_bounds && p2_in_bounds);
+    *on_p2_side = box->position.v[0] == -box_max_push_distance;
+    *on_p1_side = box->position.v[0] == box_max_push_distance;
+
+    *p1_pushback = (on_p2_side && p1_in_bounds) || (p2_in_bounds && p1_in_bounds);
+    *p2_pushback = (on_p1_side && p2_in_bounds) || (p1_in_bounds && p2_in_bounds);
 }
 
 /*==============================
@@ -461,16 +467,25 @@ void minigame_loop(float deltatime)
 
     bool p1_moveback1 = false;
     bool p2_moveback1 = false;
-    processBox(players[0].position.v[0], players[0].position.v[2], players[1].position.v[0], players[1].position.v[2], deltatime, &box1, &p1_moveback1, &p2_moveback1);
+    bool on_p1_side1 = false;
+    bool on_p2_side1 = false;
+    processBox(players[0].position.v[0], players[0].position.v[2], players[1].position.v[0], players[1].position.v[2], deltatime, &box1, &p1_moveback1, &p2_moveback1, &on_p1_side1, &on_p2_side1);
     bool p1_moveback2 = false;
     bool p2_moveback2 = false;
-    processBox(players[0].position.v[0], players[0].position.v[2], players[1].position.v[0], players[1].position.v[2], deltatime, &box2, &p1_moveback2, &p2_moveback2);
+    bool on_p1_side2 = false;
+    bool on_p2_side2 = false;
+    processBox(players[0].position.v[0], players[0].position.v[2], players[1].position.v[0], players[1].position.v[2], deltatime, &box2, &p1_moveback2, &p2_moveback2, &on_p1_side2, &on_p2_side2);
     bool p1_moveback3 = false;
     bool p2_moveback3 = false;
-    processBox(players[0].position.v[0], players[0].position.v[2],players[1].position.v[0], players[1].position.v[2], deltatime, &box3, &p1_moveback3, &p2_moveback3);
+    bool on_p1_side3 = false;
+    bool on_p2_side3 = false;
+    processBox(players[0].position.v[0], players[0].position.v[2],players[1].position.v[0], players[1].position.v[2], deltatime, &box3, &p1_moveback3, &p2_moveback3, &on_p1_side3, &on_p2_side3);
 
     bool p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
     bool p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
+
+    bool all_p1_inside = on_p1_side1 && on_p1_side2 && on_p1_side3;
+    bool all_p2_inside = on_p2_side1 && on_p2_side2 && on_p2_side3;
 
     if (p1_moveBack)
     {
@@ -490,16 +505,19 @@ void minigame_loop(float deltatime)
 
     p1_moveback1 = false;
     p2_moveback1 = false;
-    processBox_h(players[0].position.v[0], players[0].position.v[2], players[3].position.v[0], players[3].position.v[2], deltatime, &box4, &p1_moveback1, &p2_moveback1);
+    processBox_h(players[0].position.v[0], players[0].position.v[2], players[3].position.v[0], players[3].position.v[2], deltatime, &box4, &p1_moveback1, &p2_moveback1, &on_p1_side1, &on_p2_side1);
     p1_moveback2 = false;
     p2_moveback2 = false;
-    processBox_h(players[0].position.v[0], players[0].position.v[2], players[3].position.v[0], players[3].position.v[2], deltatime, &box5, &p1_moveback2, &p2_moveback2);
+    processBox_h(players[0].position.v[0], players[0].position.v[2], players[3].position.v[0], players[3].position.v[2], deltatime, &box5, &p1_moveback2, &p2_moveback2, &on_p1_side2, &on_p2_side2);
     p1_moveback3 = false;
     p2_moveback3 = false;
-    processBox_h(players[0].position.v[0], players[0].position.v[2],players[3].position.v[0], players[3].position.v[2], deltatime, &box6, &p1_moveback3, &p2_moveback3);
+    processBox_h(players[0].position.v[0], players[0].position.v[2],players[3].position.v[0], players[3].position.v[2], deltatime, &box6, &p1_moveback3, &p2_moveback3, &on_p1_side3, &on_p2_side3);
 
     p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
     p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
+
+    bool all_p1_inside2 = on_p1_side1 && on_p1_side2 && on_p1_side3;
+    bool all_p4_inside = on_p2_side1 && on_p2_side2 && on_p2_side3;
 
     if (p1_moveBack)
     {
@@ -519,16 +537,19 @@ void minigame_loop(float deltatime)
 
     p1_moveback1 = false;
     p2_moveback1 = false;
-    processBox_h(players[1].position.v[0], players[1].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box7, &p1_moveback1, &p2_moveback1);
+    processBox_h(players[1].position.v[0], players[1].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box7, &p1_moveback1, &p2_moveback1, &on_p1_side1, &on_p2_side1);
     p1_moveback2 = false;
     p2_moveback2 = false;
-    processBox_h(players[1].position.v[0], players[1].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box8, &p1_moveback2, &p2_moveback2);
+    processBox_h(players[1].position.v[0], players[1].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box8, &p1_moveback2, &p2_moveback2, &on_p1_side2, &on_p2_side2);
     p1_moveback3 = false;
     p2_moveback3 = false;
-    processBox_h(players[1].position.v[0], players[1].position.v[2],players[2].position.v[0], players[2].position.v[2], deltatime, &box9, &p1_moveback3, &p2_moveback3);
+    processBox_h(players[1].position.v[0], players[1].position.v[2],players[2].position.v[0], players[2].position.v[2], deltatime, &box9, &p1_moveback3, &p2_moveback3, &on_p1_side3, &on_p2_side3);
 
     p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
     p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
+
+    bool all_p2_inside2 = on_p1_side1 && on_p1_side2 && on_p1_side3;
+    bool all_p3_inside = on_p2_side1 && on_p2_side2 && on_p2_side3;
 
     if (p1_moveBack)
     {
@@ -548,16 +569,19 @@ void minigame_loop(float deltatime)
 
     p1_moveback1 = false;
     p2_moveback1 = false;
-    processBox(players[3].position.v[0], players[3].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box10, &p1_moveback1, &p2_moveback1);
+    processBox(players[3].position.v[0], players[3].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box10, &p1_moveback1, &p2_moveback1, &on_p1_side1, &on_p2_side1);
     p1_moveback2 = false;
     p2_moveback2 = false;
-    processBox(players[3].position.v[0], players[3].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box11, &p1_moveback2, &p2_moveback2);
+    processBox(players[3].position.v[0], players[3].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box11, &p1_moveback2, &p2_moveback2, &on_p1_side2, &on_p2_side2);
     p1_moveback3 = false;
     p2_moveback3 = false;
-    processBox(players[3].position.v[0], players[3].position.v[2],players[2].position.v[0], players[2].position.v[2], deltatime, &box12, &p1_moveback3, &p2_moveback3);
+    processBox(players[3].position.v[0], players[3].position.v[2],players[2].position.v[0], players[2].position.v[2], deltatime, &box12, &p1_moveback3, &p2_moveback3, &on_p1_side3, &on_p2_side3);
 
     p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
     p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
+
+    bool all_p4_inside2 = on_p1_side1 && on_p1_side2 && on_p1_side3;
+    bool all_p3_inside2 = on_p2_side1 && on_p2_side2 && on_p2_side3;
 
     if (p1_moveBack)
     {
@@ -573,6 +597,23 @@ void minigame_loop(float deltatime)
         {
             players[2].velocity.v[2] = 0;
         }
+    }
+
+    if (all_p1_inside && all_p1_inside2)
+    {
+        p1_dead = true;
+    }
+    if (all_p2_inside && all_p2_inside2)
+    {
+        p2_dead = true;
+    }
+    if (all_p3_inside && all_p3_inside2)
+    {
+        p3_dead = true;
+    }
+    if (all_p4_inside && all_p4_inside2)
+    {
+        p4_dead = true;
     }
 
     mutateBoxPostion(&box1, 0.05f);
@@ -678,6 +719,7 @@ void minigame_loop(float deltatime)
 
       for (int i = 0; i < 4; i++)
       {
+
         t3d_matrix_push(players[i].matrixFP);
         t3d_model_draw(boxModel);
         t3d_matrix_pop(1);
@@ -705,7 +747,23 @@ void minigame_loop(float deltatime)
     // }
 
     rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 155, 200, "CamPos (%f, %f)", camPos.y, camPos.z);
-    
+
+    if (p4_dead)
+    {
+        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 200, 220, "P4 Dead");
+    }
+    if (p1_dead)
+    {
+        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 10, 220, "P1 Dead");
+    }
+    if (p3_dead)
+    {
+        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 200, 10, "P3 Dead");
+    }
+    if (p2_dead)
+    {
+        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 10, 10, "P2 Dead");
+    }
 
     if (is_countdown()) {
         // Draw countdown
