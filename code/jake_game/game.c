@@ -100,29 +100,8 @@ int winningPlayer = 0;
 T3DModel *mapModel = NULL;
 T3DModel *boxModel = NULL;
 
-struct Box box1;
-
-struct Box box2;
-
-struct Box box3;
-
-struct Box box4;
-
-struct Box box5;
-
-struct Box box6;
-
-struct Box box7;
-
-struct Box box8;
-
-struct Box box9;
-
-struct Box box10;
-
-struct Box box11;
-
-struct Box box12;
+#define NUM_BOXES 7
+struct Box boxes[NUM_BOXES];
 
 struct Box players[4];
 
@@ -174,32 +153,6 @@ void processBox(float player_x, float player_y, float player2_x, float player2_y
     *p2_pushback = (on_p1_side && p2_in_bounds) || (p1_in_bounds && p2_in_bounds);
 }
 
-void processBox_h(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback, bool *on_p1_side, bool *on_p2_side)
-{
-    bool p1_in_bounds = in_square_bounds(player_x, player_y,box->position.v[0], box->position.v[2], box_size );
-
-    if (p1_in_bounds)
-    {
-        box->position.v[0] -= deltatime * move_speed;
-    }
-
-    bool p2_in_bounds = in_square_bounds(player2_x, player2_y,box->position.v[0], box->position.v[2], box_size );
-
-    if (p2_in_bounds)
-    {
-        box->position.v[0] += deltatime * move_speed;
-    }
-
-    box->position.v[0] = fmax(box->position.v[0], -box_max_push_distance);
-    box->position.v[0] = fmin(box->position.v[0], box_max_push_distance);
-
-    *on_p2_side = box->position.v[0] == -box_max_push_distance;
-    *on_p1_side = box->position.v[0] == box_max_push_distance;
-
-    *p1_pushback = (on_p2_side && p1_in_bounds) || (p2_in_bounds && p1_in_bounds);
-    *p2_pushback = (on_p1_side && p2_in_bounds) || (p1_in_bounds && p2_in_bounds);
-}
-
 /*==============================
     minigame_init
     The minigame initialization function
@@ -241,53 +194,24 @@ void minigame_init()
 
     boxModel = t3d_model_load("rom:/jake_game/box.t3dm");
 
-    InitBox(&box1);
+    for (int i = 0; i < NUM_BOXES; i++)
+    {
+        InitBox(&boxes[i]);
+    }
 
-    InitBox(&box2);
+    boxes[0].position.v[0] = 10;
 
-    InitBox(&box3);
+    boxes[1].position.v[0] = 20;
 
-    InitBox(&box4);
+    boxes[2].position.v[0] = 30;
 
-    InitBox(&box5);
+    boxes[3].position.v[0] = -10;
 
-    InitBox(&box6);
+    boxes[4].position.v[0] = -20;
 
-    InitBox(&box7);
+    boxes[5].position.v[0] = -30;
 
-    InitBox(&box8);
-
-    InitBox(&box9);
-
-    InitBox(&box10);
-
-    InitBox(&box11);
-
-    InitBox(&box12);
-
-    box1.position.v[0] = 10;
-
-    box2.position.v[0] = 20;
-
-    box3.position.v[0] = 30;
-
-    box4.position.v[2] = -10;
-
-    box5.position.v[2] = -20;
-
-    box6.position.v[2] = -30;
-
-    box7.position.v[2] = 10;
-
-    box8.position.v[2] = 20;
-
-    box9.position.v[2] = 30;
-
-    box10.position.v[0] = -10;
-
-    box11.position.v[0] = -20;
-
-    box12.position.v[0] = -30;
+    boxes[6].position.v[0] = 0;
 
     boxPosition.v[0] = 20;
 
@@ -465,172 +389,80 @@ void minigame_loop(float deltatime)
 
     t3d_state_set_drawflags(T3D_FLAG_SHADED | T3D_FLAG_DEPTH);
 
-    bool p1_moveback1 = false;
-    bool p2_moveback1 = false;
-    bool on_p1_side1 = false;
-    bool on_p2_side1 = false;
-    processBox(players[0].position.v[0], players[0].position.v[2], players[1].position.v[0], players[1].position.v[2], deltatime, &box1, &p1_moveback1, &p2_moveback1, &on_p1_side1, &on_p2_side1);
-    bool p1_moveback2 = false;
-    bool p2_moveback2 = false;
-    bool on_p1_side2 = false;
-    bool on_p2_side2 = false;
-    processBox(players[0].position.v[0], players[0].position.v[2], players[1].position.v[0], players[1].position.v[2], deltatime, &box2, &p1_moveback2, &p2_moveback2, &on_p1_side2, &on_p2_side2);
-    bool p1_moveback3 = false;
-    bool p2_moveback3 = false;
-    bool on_p1_side3 = false;
-    bool on_p2_side3 = false;
-    processBox(players[0].position.v[0], players[0].position.v[2],players[1].position.v[0], players[1].position.v[2], deltatime, &box3, &p1_moveback3, &p2_moveback3, &on_p1_side3, &on_p2_side3);
+    bool player_moveback[4];
 
-    bool p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
-    bool p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
+    bool on_bottom_side = true;
+    bool on_top_side = true;
 
-    bool all_p1_inside = on_p1_side1 && on_p1_side2 && on_p1_side3;
-    bool all_p2_inside = on_p2_side1 && on_p2_side2 && on_p2_side3;
+    int bottom_side_indeces[2] = {0, 3};
+    int top_side_indeces[2] = {1, 2};
 
-    if (p1_moveBack)
+    for (int bottom_index = 0; bottom_index < 2; bottom_index++)
     {
-        if (players[0].velocity.v[2] > 0)
+        for (int top_index = 0; top_index < 2; top_index++)
         {
-            players[0].velocity.v[2] = 0;
+            bool bottom_moveback = false;
+            bool top_moveback = false;
+
+            bool temp_bottom_moveback;
+            bool temp_top_moveback;
+
+            bool temp_on_bottom_side;
+            bool temp_on_top_side;
+
+            for (int i = 0; i < NUM_BOXES; i++)
+            {
+                processBox(players[bottom_side_indeces[bottom_index]].position.v[0], players[bottom_side_indeces[bottom_index]].position.v[2], players[top_side_indeces[top_index]].position.v[0], players[top_side_indeces[top_index]].position.v[2], deltatime, &boxes[i], &temp_bottom_moveback, &temp_top_moveback, &temp_on_bottom_side, &temp_on_top_side);
+                bottom_moveback = bottom_moveback || temp_bottom_moveback;
+                top_moveback = top_moveback || temp_top_moveback;
+                on_bottom_side = on_bottom_side && temp_on_bottom_side;
+                on_top_side = on_top_side && temp_on_top_side;
+            }
+
+            player_moveback[bottom_side_indeces[bottom_index]] = bottom_moveback;
+            player_moveback[top_side_indeces[top_index]] = top_moveback;
         }
     }
 
-    if (p2_moveBack)
-    {
-        if (players[1].velocity.v[2] < 0)
-        {
-            players[1].velocity.v[2] = 0;
-        }
-    }
-
-    p1_moveback1 = false;
-    p2_moveback1 = false;
-    processBox_h(players[0].position.v[0], players[0].position.v[2], players[3].position.v[0], players[3].position.v[2], deltatime, &box4, &p1_moveback1, &p2_moveback1, &on_p1_side1, &on_p2_side1);
-    p1_moveback2 = false;
-    p2_moveback2 = false;
-    processBox_h(players[0].position.v[0], players[0].position.v[2], players[3].position.v[0], players[3].position.v[2], deltatime, &box5, &p1_moveback2, &p2_moveback2, &on_p1_side2, &on_p2_side2);
-    p1_moveback3 = false;
-    p2_moveback3 = false;
-    processBox_h(players[0].position.v[0], players[0].position.v[2],players[3].position.v[0], players[3].position.v[2], deltatime, &box6, &p1_moveback3, &p2_moveback3, &on_p1_side3, &on_p2_side3);
-
-    p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
-    p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
-
-    bool all_p1_inside2 = on_p1_side1 && on_p1_side2 && on_p1_side3;
-    bool all_p4_inside = on_p2_side1 && on_p2_side2 && on_p2_side3;
-
-    if (p1_moveBack)
-    {
-        if (players[0].velocity.v[0] < 0)
-        {
-            players[0].velocity.v[0] = 0;
-        }
-    }
-
-    if (p2_moveBack)
-    {
-        if (players[3].velocity.v[0] > 0)
-        {
-            players[3].velocity.v[0] = 0;
-        }
-    }
-
-    p1_moveback1 = false;
-    p2_moveback1 = false;
-    processBox_h(players[1].position.v[0], players[1].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box7, &p1_moveback1, &p2_moveback1, &on_p1_side1, &on_p2_side1);
-    p1_moveback2 = false;
-    p2_moveback2 = false;
-    processBox_h(players[1].position.v[0], players[1].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box8, &p1_moveback2, &p2_moveback2, &on_p1_side2, &on_p2_side2);
-    p1_moveback3 = false;
-    p2_moveback3 = false;
-    processBox_h(players[1].position.v[0], players[1].position.v[2],players[2].position.v[0], players[2].position.v[2], deltatime, &box9, &p1_moveback3, &p2_moveback3, &on_p1_side3, &on_p2_side3);
-
-    p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
-    p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
-
-    bool all_p2_inside2 = on_p1_side1 && on_p1_side2 && on_p1_side3;
-    bool all_p3_inside = on_p2_side1 && on_p2_side2 && on_p2_side3;
-
-    if (p1_moveBack)
-    {
-        if (players[1].velocity.v[0] < 0)
-        {
-            players[1].velocity.v[0] = 0;
-        }
-    }
-
-    if (p2_moveBack)
-    {
-        if (players[2].velocity.v[0] > 0)
-        {
-            players[2].velocity.v[0] = 0;
-        }
-    }
-
-    p1_moveback1 = false;
-    p2_moveback1 = false;
-    processBox(players[3].position.v[0], players[3].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box10, &p1_moveback1, &p2_moveback1, &on_p1_side1, &on_p2_side1);
-    p1_moveback2 = false;
-    p2_moveback2 = false;
-    processBox(players[3].position.v[0], players[3].position.v[2], players[2].position.v[0], players[2].position.v[2], deltatime, &box11, &p1_moveback2, &p2_moveback2, &on_p1_side2, &on_p2_side2);
-    p1_moveback3 = false;
-    p2_moveback3 = false;
-    processBox(players[3].position.v[0], players[3].position.v[2],players[2].position.v[0], players[2].position.v[2], deltatime, &box12, &p1_moveback3, &p2_moveback3, &on_p1_side3, &on_p2_side3);
-
-    p1_moveBack = p1_moveback1 || p1_moveback2 || p1_moveback3;
-    p2_moveBack = p2_moveback1 || p2_moveback2 || p2_moveback3;
-
-    bool all_p4_inside2 = on_p1_side1 && on_p1_side2 && on_p1_side3;
-    bool all_p3_inside2 = on_p2_side1 && on_p2_side2 && on_p2_side3;
-
-    if (p1_moveBack)
-    {
-        if (players[3].velocity.v[2] > 0)
-        {
-            players[3].velocity.v[2] = 0;
-        }
-    }
-
-    if (p2_moveBack)
-    {
-        if (players[2].velocity.v[2] < 0)
-        {
-            players[2].velocity.v[2] = 0;
-        }
-    }
-
-    if (all_p1_inside && all_p1_inside2)
+    if (on_bottom_side)
     {
         p1_dead = true;
-    }
-    if (all_p2_inside && all_p2_inside2)
-    {
-        p2_dead = true;
-    }
-    if (all_p3_inside && all_p3_inside2)
-    {
-        p3_dead = true;
-    }
-    if (all_p4_inside && all_p4_inside2)
-    {
         p4_dead = true;
     }
 
-    mutateBoxPostion(&box1, 0.05f);
-    mutateBoxPostion(&box2, 0.05f);
-    mutateBoxPostion(&box3, 0.05f);
+    if (on_top_side)
+    {
+        p2_dead = true;
+        p3_dead = true;
+    }
 
-    mutateBoxPostion(&box4, 0.05f);
-    mutateBoxPostion(&box5, 0.05f);
-    mutateBoxPostion(&box6, 0.05f);
+    for (int i = 0; i < 4; i++)
+    {
+        bool moveBack = player_moveback[i];
+        if (moveBack)
+        {
+            bool is_bottom_side = i == 0 || i == 3;
+            if (is_bottom_side)
+            {
+                if (players[i].velocity.v[2] > 0)
+                {
+                    players[i].velocity.v[2] = 0;
+                }
+            }
+            else
+            {
+                if (players[i].velocity.v[2] < 0)
+                {
+                    players[i].velocity.v[2] = 0;
+                }
+            }
+        }
+    }
 
-    mutateBoxPostion(&box7, 0.05f);
-    mutateBoxPostion(&box8, 0.05f);
-    mutateBoxPostion(&box9, 0.05f);
-
-    mutateBoxPostion(&box10, 0.05f);
-    mutateBoxPostion(&box11, 0.05f);
-    mutateBoxPostion(&box12, 0.05f);
+    for (int i = 0; i < NUM_BOXES; i++)
+    {
+        mutateBoxPostion(&boxes[i], 0.05f);
+    }
 
     for (int i = 0; i < 4; i++)
     {
@@ -669,53 +501,13 @@ void minigame_loop(float deltatime)
     //   t3d_model_draw(mapModel);
     //   t3d_matrix_pop(1);
 
-      t3d_matrix_push(box1.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box2.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box3.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box4.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box5.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box6.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box7.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box8.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box9.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box10.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box11.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
-
-      t3d_matrix_push(box12.matrixFP);
-      t3d_model_draw(boxModel);
-      t3d_matrix_pop(1);
+      for (int i = 0; i < NUM_BOXES; i++)
+      {
+        t3d_matrix_push(boxes[i].matrixFP);
+        t3d_model_draw(boxModel);
+        t3d_matrix_pop(1);
+      }
+      
 
       for (int i = 0; i < 4; i++)
       {
@@ -734,8 +526,6 @@ void minigame_loop(float deltatime)
     rdpq_sync_pipe();
 
     rdpq_set_mode_standard();
-
-    in_bounds = in_square_bounds(boxPosition.v[0], boxPosition.v[2],box1.position.v[0], box1.position.v[2], 10 );
 
     // if (in_bounds)
     // {
