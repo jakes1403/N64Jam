@@ -100,7 +100,7 @@ int winningPlayer = 0;
 T3DModel *mapModel = NULL;
 T3DModel *boxModel = NULL;
 
-#define NUM_BOXES 7
+#define NUM_BOXES 9
 struct Box boxes[NUM_BOXES];
 
 struct Box players[4];
@@ -199,19 +199,15 @@ void minigame_init()
         InitBox(&boxes[i]);
     }
 
-    boxes[0].position.v[0] = 10;
-
-    boxes[1].position.v[0] = 20;
-
-    boxes[2].position.v[0] = 30;
-
+    boxes[0].position.v[0] = -40;
+    boxes[1].position.v[0] = -30;
+    boxes[2].position.v[0] = -20;
     boxes[3].position.v[0] = -10;
-
-    boxes[4].position.v[0] = -20;
-
-    boxes[5].position.v[0] = -30;
-
-    boxes[6].position.v[0] = 0;
+    boxes[4].position.v[0] = 0;
+    boxes[5].position.v[0] = 10;
+    boxes[6].position.v[0] = 20;
+    boxes[7].position.v[0] = 30;
+    boxes[8].position.v[0] = 40;
 
     boxPosition.v[0] = 20;
 
