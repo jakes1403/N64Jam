@@ -127,18 +127,18 @@ bool in_square_bounds(float x, float y, float square_x, float square_y, float sq
 const int box_size = 10;
 const int box_max_push_distance = 3;
 
-void processBox(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback, bool *on_p1_side, bool *on_p2_side)
+void processBox(float player_x, float player_y, float player2_x, float player2_y, float deltatime, struct Box* box, bool *p1_pushback, bool *p2_pushback, bool *on_p1_side, bool *on_p2_side, bool locked)
 {
     bool p1_in_bounds = in_square_bounds(player_x, player_y,box->position.v[0], box->position.v[2], box_size );
 
-    if (p1_in_bounds)
+    if (p1_in_bounds && !locked)
     {
         box->position.v[2] += deltatime * move_speed;
     }
 
     bool p2_in_bounds = in_square_bounds(player2_x, player2_y,box->position.v[0], box->position.v[2], box_size );
 
-    if (p2_in_bounds)
+    if (p2_in_bounds && !locked)
     {
         box->position.v[2] -= deltatime * move_speed;
     }
@@ -149,8 +149,8 @@ void processBox(float player_x, float player_y, float player2_x, float player2_y
     *on_p2_side = box->position.v[2] == box_max_push_distance;
     *on_p1_side = box->position.v[2] == -box_max_push_distance;
 
-    *p1_pushback = (on_p2_side && p1_in_bounds) || (p2_in_bounds && p1_in_bounds);
-    *p2_pushback = (on_p1_side && p2_in_bounds) || (p1_in_bounds && p2_in_bounds);
+    *p1_pushback = (on_p2_side && p1_in_bounds) || (p2_in_bounds && p1_in_bounds) || (locked && p1_in_bounds);
+    *p2_pushback = (on_p1_side && p2_in_bounds) || (p1_in_bounds && p2_in_bounds) || (locked && p2_in_bounds);
 }
 
 /*==============================
@@ -264,11 +264,34 @@ void minigame_fixedloop(float deltatime)
     }
 }
 
+bool groups_locked[3] = {
+    false,
+    false,
+    false
+};
+
+bool groups_top[3] = {
+    false,
+    false,
+    false
+};
+
+bool groups_bottom[3] = {
+    false,
+    false,
+    false
+};
+
 /*==============================
     minigame_loop
     Code that is called every loop.
     @param  The delta time for this tick
 ==============================*/
+
+bool bottom_team_wins = false;
+bool top_team_wins = false;
+
+bool trigger_ending = false;
 
 void minigame_loop(float deltatime)
 {
@@ -348,14 +371,12 @@ void minigame_loop(float deltatime)
         //     camPos.z += 1;
         // }
 
+    }
 
-        if (btn.a && !is_countdown() && !is_ending)
-        {
-            core_set_winner(i);
-            is_ending = true;
-            wav64_play(&sfx_stop, 31);
-            winningPlayer = i;
-        }
+    if (trigger_ending && !is_countdown() && !is_ending)
+    {
+        is_ending = true;
+        wav64_play(&sfx_stop, 31);
     }
 
 
@@ -387,8 +408,13 @@ void minigame_loop(float deltatime)
 
     bool player_moveback[4];
 
-    bool on_bottom_side = true;
-    bool on_top_side = true;
+    groups_top[0] = true;
+    groups_top[1] = true;
+    groups_top[2] = true;
+
+    groups_bottom[0] = true;
+    groups_bottom[1] = true;
+    groups_bottom[2] = true;
 
     int bottom_side_indeces[2] = {0, 3};
     int top_side_indeces[2] = {1, 2};
@@ -408,11 +434,15 @@ void minigame_loop(float deltatime)
 
             for (int i = 0; i < NUM_BOXES; i++)
             {
-                processBox(players[bottom_side_indeces[bottom_index]].position.v[0], players[bottom_side_indeces[bottom_index]].position.v[2], players[top_side_indeces[top_index]].position.v[0], players[top_side_indeces[top_index]].position.v[2], deltatime, &boxes[i], &temp_bottom_moveback, &temp_top_moveback, &temp_on_bottom_side, &temp_on_top_side);
+                int box_group = i / 3;
+
+                bool locked = groups_locked[box_group];
+
+                processBox(players[bottom_side_indeces[bottom_index]].position.v[0], players[bottom_side_indeces[bottom_index]].position.v[2], players[top_side_indeces[top_index]].position.v[0], players[top_side_indeces[top_index]].position.v[2], deltatime, &boxes[i], &temp_bottom_moveback, &temp_top_moveback, &temp_on_bottom_side, &temp_on_top_side, locked);
                 bottom_moveback = bottom_moveback || temp_bottom_moveback;
                 top_moveback = top_moveback || temp_top_moveback;
-                on_bottom_side = on_bottom_side && temp_on_bottom_side;
-                on_top_side = on_top_side && temp_on_top_side;
+                groups_bottom[box_group] = groups_bottom[box_group] && temp_on_bottom_side;
+                groups_top[box_group] = groups_top[box_group] && temp_on_top_side;
             }
 
             player_moveback[bottom_side_indeces[bottom_index]] = bottom_moveback;
@@ -420,16 +450,56 @@ void minigame_loop(float deltatime)
         }
     }
 
-    if (on_bottom_side)
+    for (int i = 0; i < 3; i++)
     {
-        p1_dead = true;
-        p4_dead = true;
+        if (groups_bottom[i] || groups_top[i])
+        {
+            groups_locked[i] = true;
+        }
     }
 
-    if (on_top_side)
+    bool all_locked = true;
+    for (int i = 0; i < 3; i++)
     {
-        p2_dead = true;
-        p3_dead = true;
+        all_locked = all_locked && groups_locked[i];
+    }
+
+    if (all_locked)
+    {
+        int top_count = 0;
+        int bottom_count = 0;
+        for (int i = 0; i < 3; i++)
+        {
+            if (groups_top[i])
+            {
+                top_count++;
+            }
+            if (groups_bottom[i])
+            {
+                bottom_count++;
+            }
+        }
+        bool top_winner = top_count < bottom_count;
+        bool bottom_winner = top_count > bottom_count;
+
+        if (top_winner)
+        {
+            core_set_winner(1);
+            core_set_winner(2);
+            trigger_ending = true;
+            top_team_wins = true;
+            // p1_dead = true;
+            // p4_dead = true;
+        }
+        if (bottom_winner)
+        {
+            core_set_winner(0);
+            core_set_winner(4);
+            trigger_ending = true;
+            bottom_team_wins = true;
+            // p2_dead = true;
+            // p3_dead = true;
+        }
     }
 
     for (int i = 0; i < 4; i++)
@@ -532,23 +602,23 @@ void minigame_loop(float deltatime)
     //     rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 155, 100, "NOT IN BOUNDS");
     // }
 
-    rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 155, 200, "CamPos (%f, %f)", camPos.y, camPos.z);
+    //rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 155, 200, "CamPos (%f, %f)", camPos.y, camPos.z);
 
     if (p4_dead)
     {
-        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 200, 220, "P4 Dead");
+        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 200, 200, "P4 Dead");
     }
     if (p1_dead)
     {
-        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 10, 220, "P1 Dead");
+        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 10, 200, "P1 Dead");
     }
     if (p3_dead)
     {
-        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 200, 10, "P3 Dead");
+        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 200, 30, "P3 Dead");
     }
     if (p2_dead)
     {
-        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 10, 10, "P2 Dead");
+        rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 10, 30, "P2 Dead");
     }
 
     if (is_countdown()) {
@@ -557,11 +627,17 @@ void minigame_loop(float deltatime)
     } else if (countdown_timer > -GO_DELAY) {
         // For a short time after countdown is over, draw "GO!"
         rdpq_text_print(NULL, FONT_BUILTIN_DEBUG_MONO, 150, 100, "GO!");
-    } else if (is_ending && end_timer >= WIN_SHOW_DELAY) {
-        // Draw winner announcement (There might be multiple winners)
-        int ycur = 100;
-        int i = winningPlayer;
-        ycur += rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 120, ycur, "Player %d wins!\n", i+1).advance_y;
+    } else if (is_ending && end_timer >= WIN_SHOW_DELAY) { 
+        if (bottom_team_wins)
+        {
+            rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 120, 100, "Players 1 and 4 win!\n");
+        }
+        if (top_team_wins)
+        {
+            rdpq_text_printf(NULL, FONT_BUILTIN_DEBUG_MONO, 120, 100, "Players 2 and 3 win!\n");
+        }
+        
+
     }
 
     rdpq_detach_show();
