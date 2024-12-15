@@ -153,6 +153,7 @@ void processBox(float player_x, float player_y, float player2_x, float player2_y
     *p2_pushback = (on_p1_side && p2_in_bounds) || (p1_in_bounds && p2_in_bounds) || (locked && p2_in_bounds);
 }
 
+
 /*==============================
     minigame_init
     The minigame initialization function
@@ -292,6 +293,32 @@ bool bottom_team_wins = false;
 bool top_team_wins = false;
 
 bool trigger_ending = false;
+
+void check_and_resolve_collision(struct Box *player, float left, float right, float top, float bottom) {
+    // Check for collision along the X-axis
+    if (player->position.v[0] + player->velocity.v[0] < left) {
+        // Collision on the left side
+        player->position.v[0] = left; // Align player position to the boundary
+        player->velocity.v[0] = fmax(player->velocity.v[0], 0); // Stop or reverse leftward movement
+    } else if (player->position.v[0] + player->velocity.v[0] > right) {
+        // Collision on the right side
+        player->position.v[0] = right; // Align player position to the boundary
+        player->velocity.v[0] = fmin(player->velocity.v[0], 0); // Stop or reverse rightward movement
+    }
+
+    // Check for collision along the Z-axis
+    if (player->position.v[2] + player->velocity.v[2] < top) {
+        // Collision on the top side
+        player->position.v[2] = top; // Align player position to the boundary
+        player->velocity.v[2] = fmax(player->velocity.v[2], 0); // Stop or reverse upward movement
+    } else if (player->position.v[2] + player->velocity.v[2] > bottom) {
+        // Collision on the bottom side
+        player->position.v[2] = bottom; // Align player position to the boundary
+        player->velocity.v[2] = fmin(player->velocity.v[2], 0); // Stop or reverse downward movement
+    }
+}
+
+
 
 void minigame_loop(float deltatime)
 {
@@ -525,9 +552,15 @@ void minigame_loop(float deltatime)
         }
     }
 
+    
+
     for (int i = 0; i < NUM_BOXES; i++)
     {
         mutateBoxPostion(&boxes[i], 0.05f);
+    }
+
+    for (int i = 0; i < 4; i++) {
+        check_and_resolve_collision(&players[i], 0, 10, 10, 0);
     }
 
     for (int i = 0; i < 4; i++)
